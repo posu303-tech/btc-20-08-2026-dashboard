@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC 20_08_2026 · FOMC Setup Monitor</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>BTC <span>20_08_2026</span> · FOMC Setup Monitor</h1>
+    <div class="feed-status"><span id="wsDot" class="dot"></span><span id="wsLabel">WS connecting</span>
+    <span class="sep">|</span><span id="restDot" class="dot"></span><span id="restLabel">context state loading</span></div>
+  </div>
+  <div class="price-block">
+    <div id="lastPrice" class="last-price">--</div>
+    <div id="priceMeta" class="price-meta">24h --% &middot; prior close --</div>
+  </div>
+  <div class="clock-block">
+    <div id="utcClock" class="clock">--</div>
+    <div class="clock-sub">UTC &middot; <span id="phaseName">--</span></div>
+  </div>
+</header>
+
+<div id="triggerBanner" class="trigger-banner hidden"></div>
+
+<main class="grid">
+  <section class="card panel-session">
+    <h2>Session <span class="live-tag">5m ctx</span></h2>
+    <canvas id="spark" width="620" height="180"></canvas>
+    <table class="kv">
+      <tr><td>Session open</td><td id="sOpen" class="num">--</td></tr>
+      <tr><td>Session high / low</td><td id="sHighLow" class="num">--</td></tr>
+      <tr><td>Session VWAP</td><td id="sVwap" class="num">--</td></tr>
+      <tr><td>Prior close</td><td id="pClose" class="num">--</td></tr>
+      <tr><td>5m close / 30m close</td><td id="cClose" class="num">--</td></tr>
+      <tr><td>Post-print vol (30m) / avg</td><td id="cVol" class="num">--</td></tr>
+      <tr><td>Vol ratio (30m/avg)</td><td id="volRatio" class="num">--</td></tr>
+      <tr><td>Funding (perp, 8h)</td><td id="cFunding" class="num">--</td></tr>
+      <tr><td>Perp OI (BTC futures)</td><td id="cOi" class="num">--</td></tr>
+      <tr><td>US 30y yield</td><td id="cYield" class="num">--</td></tr>
+      <tr><td>SSR (BTC mcap / stables)</td><td id="cSsr" class="num">--</td></tr>
+      <tr><td>ATR14 daily / 1h</td><td id="atr" class="num">--</td></tr>
+      <tr><td>Last update</td><td id="lastUpdate" class="num">--</td></tr>
+    </table>
+    <button id="notifBtn" class="btn">Enable browser alerts</button>
+  </section>
+
+  <section class="card panel-setups">
+    <h2>Trade Setups <span class="live-tag">event-gated</span></h2>
+    <div id="setups"></div>
+  </section>
+
+  <section class="col-right">
+    <section class="card">
+      <h2>Event Timeline <span class="live-tag">FOMC minutes</span></h2>
+      <div id="timeline"></div>
+      <div id="countdown" class="countdown">--</div>
+    </section>
+    <section class="card">
+      <h2>Manual Flags <span class="live-tag">minutes read</span></h2>
+      <div id="flags"></div>
+      <p class="hint">Toggle after reading the minutes. Feed setup conditions directly.</p>
+    </section>
+    <section class="card">
+      <h2>Key Levels</h2>
+      <table class="levels">
+        <thead><tr><th>Level</th><th>Price</th><th>Distance</th><th>Method</th></tr></thead>
+        <tbody id="levelRows"></tbody>
+      </table>
+    </section>
+    <section class="card">
+      <h2>Kill-Switches <span class="live-tag">risk</span></h2>
+      <div id="killsw"></div>
+    </section>
+  </section>
+</main>
+
+<section class="card log-card">
+  <h2>Trigger Log</h2>
+  <ul id="log" class="log"></ul>
+</section>
+
+<footer>
+  Data: Gate.io WebSocket BTC_USDT (primary), CoinGecko REST (fallback), state.json context (5-min pipeline: Gate.io candles, Binance funding/OI, US 30y ^TYX, stablecoin SSR). Levels & setup params from pre-market FOMC brief 2026-08-19. Event gates: minutes 18:00 UTC, trade window 18:05-18:45 UTC, force-flat 20:00 UTC. Not financial advice.
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,10 +1,10 @@
 "use strict";
 
 const GATE_WS = "wss://api.gateio.ws/ws/v4/";
-const PAIR = "BTC_USDT";
+const PAIRS = ["BTC_USDT", "ETH_USDT"];
 const STATE_URL = "data/state.json";
 const STATE_MAX_AGE = 8 * 60 * 1000;
-const CG_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true";
+const CG_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true";
 
 const EVENTS = [
   { hhmm: "16:00", label: "Funding reset (perp)" },
@@ -63,6 +63,31 @@ const SETUPS = [
       { k: "below", v: 71652, use: "close30m", label: "Not invalidated: 30m close < 71,652 (EMA200)" },
       { k: "vol", min: 1.0, label: "Volume confirm: 30m vol ≥ 1.0× avg" }
     ]
+  },
+  {
+    id: "D", name: "Wall rejection short @ 72,000 (liq grab)", dir: "SHORT", side: -1,
+    entry: { lo: 71850, hi: 71950, label: "71,850–71,950" },
+    stop: 72250, t1: 71174, t2: 70456, rr: "3.1 / 6.3",
+    invalidate: "15m/1h close > 72,150 (wall broke) — stop 72,250",
+    vol: 1.0, volLabel: "rejection candle + taker-sell dom",
+    conds: [
+      { k: "above", v: 71800, use: "sesHigh", label: "Wall tagged: session high ≥ 71,800" },
+      { k: "band", lo: 71850, hi: 71950, use: "price", label: "Price in entry zone 71,850–71,950" },
+      { k: "below", v: 71850, use: "close30m", label: "Rejection: 30m close < 71,850" },
+      { k: "vol", min: 1.0, label: "Volume confirm: 30m vol ≥ 1.0× avg" }
+    ]
+  },
+  {
+    id: "E", name: "ETH rotation long (pullback)", dir: "LONG", side: 1, coin: "eth",
+    entry: { lo: 2220, hi: 2240, label: "2,220–2,240" },
+    stop: 2160, t1: 2380, t2: 2450, rr: "2.0 / 2.9",
+    invalidate: "4h/30m close < 2,160 — stop 2,160",
+    vol: 1.0, volLabel: "ETH 30m vol ≥ 1.0× avg",
+    conds: [
+      { k: "band", lo: 2220, hi: 2240, use: "ethPrice", label: "ETH price in pullback zone 2,220–2,240" },
+      { k: "above", v: 2160, use: "ethClose30m", label: "Not invalidated: ETH 30m close ≥ 2,160" },
+      { k: "vol", min: 1.0, use: "eth", label: "Volume confirm: ETH 30m vol ≥ 1.0× avg" }
+    ]
   }
 ];
 
@@ -72,6 +97,7 @@ const state = {
   priorClose: PRIOR_CLOSE, priorVwap: null, avgVol20: null,
   atrDaily: null, atr1h: null, last1hClose: null,
   close5m: null, close30m: null, vol30: null, avgVol30m: null,
+  ethLast: null, ethChange24: null, ethClose30m: null, ethVol30: null, ethAvgVol30m: null,
   funding: null, oi: null, yield30y: null, ssr: null,
   prevOi: null, ssrBase: null,
   candles1m: [], stateTs: null, lastUpdated: null,
@@ -146,6 +172,10 @@ async function fetchState() {
     state.close30m = d.close30m;
     state.vol30 = d.vol30;
     state.avgVol30m = d.avgVol30m;
+    state.ethLast = d.ethLast;
+    state.ethClose30m = d.ethClose30m;
+    state.ethVol30 = d.ethVol30;
+    state.ethAvgVol30m = d.ethAvgVol30m;
     state.funding = d.funding;
     if (state.oi !== null && d.oi !== undefined && d.oi !== state.oi) state.prevOi = state.oi;
     state.oi = d.oi;
@@ -174,6 +204,10 @@ async function pollCoinGecko() {
     if (!j.bitcoin || typeof j.bitcoin.usd !== "number") throw new Error("no bitcoin data");
     state.last = j.bitcoin.usd;
     if (typeof j.bitcoin.usd_24h_change === "number") state.change24 = j.bitcoin.usd_24h_change;
+    if (j.ethereum && typeof j.ethereum.usd === "number") {
+      state.ethLast = j.ethereum.usd;
+      if (typeof j.ethereum.usd_24h_change === "number") state.ethChange24 = j.ethereum.usd_24h_change;
+    }
     cgBackoff = 10000;
     if (state.feed !== "gate-ws") setFeed("coingecko", "polling every 10s");
   } catch (e) {
@@ -212,18 +246,22 @@ function connectWS() {
       state.wsFails = 0;
       stopCoinGecko();
       setFeed("gate-ws", "tick stream live");
-      ws.send(JSON.stringify({ time: Math.floor(Date.now() / 1000), channel: "spot.tickers", event: "subscribe", payload: [PAIR] }));
+      ws.send(JSON.stringify({ time: Math.floor(Date.now() / 1000), channel: "spot.tickers", event: "subscribe", payload: PAIRS }));
     };
     ws.onmessage = (ev) => {
       let msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
       if (msg.event === "update" && msg.channel === "spot.tickers") {
         const r = msg.result;
-        if (r && r.last) {
+        if (!r) return;
+        if (r.currency_pair === "BTC_USDT" && r.last) {
           state.last = parseFloat(r.last);
           if (r.change_percentage !== undefined) state.change24 = parseFloat(r.change_percentage);
-          evaluate();
+        } else if (r.currency_pair === "ETH_USDT" && r.last) {
+          state.ethLast = parseFloat(r.last);
+          if (r.change_percentage !== undefined) state.ethChange24 = parseFloat(r.change_percentage);
         }
+        evaluate();
       }
     };
     ws.onclose = () => {
@@ -245,7 +283,15 @@ function connectWS() {
 function refVal(cond) {
   if (cond.use === "close5m") return state.close5m ?? state.last;
   if (cond.use === "close30m") return state.close30m ?? state.last;
+  if (cond.use === "sesHigh") return state.sesHigh ?? state.last;
+  if (cond.use === "ethPrice") return state.ethLast ?? state.last;
+  if (cond.use === "ethClose30m") return state.ethClose30m ?? state.ethLast ?? state.last;
   return state.last;
+}
+
+function volData(cond) {
+  if (cond.use === "eth") return { v: state.ethVol30 ?? 0, a: state.ethAvgVol30m || 1 };
+  return { v: state.vol30 ?? 0, a: state.avgVol30m || 1 };
 }
 
 function condMet(cond) {
@@ -254,8 +300,8 @@ function condMet(cond) {
     case "above": return p > cond.v;
     case "below": return p < cond.v;
     case "vol": {
-      const r = (state.vol30 ?? 0) / (state.avgVol30m || 1);
-      return r >= (cond.min ?? 1.0);
+      const vd = volData(cond);
+      return vd.v / vd.a >= (cond.min ?? 1.0);
     }
     case "band": return p >= cond.lo && p <= cond.hi;
   }
@@ -274,7 +320,8 @@ function condNote(cond) {
       return gap > 0 ? "gap " + fmt(gap) + " (" + fmt(Math.abs(gap) / cond.v * 100, 2) + "%)" : "OK";
     }
     case "vol": {
-      const r = (state.vol30 ?? 0) / (state.avgVol30m || 1);
+      const vd = volData(cond);
+      const r = vd.v / vd.a;
       const min = cond.min ?? 1.0;
       return r >= min ? "OK " + fmt(r, 2) + "x" : "ratio " + fmt(r, 2) + "x (needs " + min + "x)";
     }
@@ -292,15 +339,16 @@ function condProgress(cond) {
   const met = condMet(cond);
   switch (cond.k) {
     case "above": {
-      const span = Math.abs(cond.v - 68142) || 1000;
+      const span = Math.abs(cond.v * 0.02) || 1000;
       return met ? 100 : clamp(100 - (cond.v - p) / span * 100, 0, 99);
     }
     case "below": {
-      const span = Math.abs(cond.v - 71652) || 1000;
+      const span = Math.abs(cond.v * 0.02) || 1000;
       return met ? 100 : clamp(100 - (p - cond.v) / span * 100, 0, 99);
     }
     case "vol": {
-      const r = (state.vol30 ?? 0) / (state.avgVol30m || 1);
+      const vd = volData(cond);
+      const r = vd.v / vd.a;
       const min = cond.min ?? 1.0;
       return met ? 100 : clamp(r / min * 100, 0, 99);
     }
@@ -317,9 +365,12 @@ function condProgress(cond) {
 
 function setupInvalid(setup) {
   const c30 = state.close30m ?? state.last;
+  const e30 = state.ethClose30m ?? state.ethLast ?? state.last;
   if (setup.id === "A") return c30 < 68142;
   if (setup.id === "B") return c30 < 69600;
   if (setup.id === "C") return c30 > 71652;
+  if (setup.id === "D") return c30 > 72150;
+  if (setup.id === "E") return e30 < 2160;
   return false;
 }
 
@@ -347,26 +398,32 @@ function fireTrigger(setup) {
   const key = setup.id + "_" + new Date().toUTCString().slice(0, 16);
   if (state.fired[key]) return;
   state.fired[key] = true;
-  log("TRIGGER FIRED — Setup " + setup.id + " " + setup.name + " (" + setup.dir + ") @ " + fmt(state.last), "ok");
+  const p = coinPrice(setup);
+  log("TRIGGER FIRED — Setup " + setup.id + " " + setup.name + " (" + setup.dir + ") @ " + fmt(p), "ok");
   log("Levels — entry " + setup.entry.label + " | stop " + fmt(setup.stop) + " | T1 " + fmt(setup.t1) + " | T2 " + fmt(setup.t2), "ev");
   const banner = $("triggerBanner");
   banner.classList.remove("hidden");
   banner.classList.toggle("down", setup.dir === "SHORT");
-  banner.textContent = "TRIGGER — Setup " + setup.id + ": " + setup.name + " VALIDATED @ " + fmt(state.last);
+  banner.textContent = "TRIGGER — Setup " + setup.id + ": " + setup.name + " VALIDATED @ " + fmt(p);
   setTimeout(() => banner.classList.add("hidden"), 10000);
   beep(setup.dir === "LONG" ? 880 : 660);
   setTimeout(() => beep(setup.dir === "LONG" ? 1320 : 440), 250);
   if (Notification.permission === "granted") {
     try {
       new Notification("BTC 20_08_2026 TRIGGER — Setup " + setup.id, {
-        body: setup.name + " validated @ " + fmt(state.last) + " | stop " + fmt(setup.stop) + " | T1 " + fmt(setup.t1)
+        body: setup.name + " validated @ " + fmt(p) + " | stop " + fmt(setup.stop) + " | T1 " + fmt(setup.t1)
       });
     } catch (e) { }
   }
 }
 
+function coinPrice(setup) {
+  if (setup.coin === "eth") return state.ethLast ?? state.last;
+  return state.last;
+}
+
 function distInfo(level, setup) {
-  const p = state.last;
+  const p = coinPrice(setup);
   if (p === null || level === null) return { txt: "--", cls: "neu" };
   const pct = (level - p) / p * 100;
   const above = level > p;
@@ -378,7 +435,7 @@ function distInfo(level, setup) {
 }
 
 function zoneDist(setup) {
-  const p = state.last;
+  const p = coinPrice(setup);
   if (p === null) return { txt: "--", cls: "neu" };
   if (p < setup.entry.lo) {
     const g = setup.entry.lo - p;
@@ -392,7 +449,10 @@ function zoneDist(setup) {
 }
 
 function volInfo(setup) {
-  const r = (state.vol30 ?? 0) / (state.avgVol30m || 1);
+  const vd = setup.coin === "eth"
+    ? { v: state.ethVol30 ?? 0, a: state.ethAvgVol30m || 1 }
+    : { v: state.vol30 ?? 0, a: state.avgVol30m || 1 };
+  const r = vd.v / vd.a;
   const min = setup.vol ?? 1.0;
   if (r === null || isNaN(r)) return { txt: "--", cls: "neu" };
   return {
@@ -454,6 +514,7 @@ function renderPrice() {
   $("sVwap").textContent = fmt(state.vwap);
   $("pClose").textContent = fmt(state.priorClose);
   $("cClose").textContent = fmt(state.close5m) + " / " + fmt(state.close30m);
+  $("cEth").textContent = fmt(state.ethLast) + (state.ethChange24 !== null ? "  (" + state.ethChange24.toFixed(2) + "%)" : "");
   $("cVol").textContent = fmtBig(state.vol30) + " / " + fmtBig(state.avgVol30m);
   $("volRatio").textContent = state.avgVol30m ? (state.vol30 / state.avgVol30m).toFixed(2) + "x" : "--";
   $("cFunding").textContent = state.funding !== null ? fmt(state.funding, 4) + "%" : "--";
@@ -555,7 +616,7 @@ function drawSpark() {
   const cs = state.candles1m;
   if (cs.length < 2) return;
   const prices = cs.map(c => c[1]);
-  const hLines = [69400, 69724, 71316, 71652, 68142];
+  const hLines = [72250, 71850, 71316, 71174, 70456, 69600, 69400, 68142];
   const min = Math.min(...prices, ...hLines) * 0.997;
   const max = Math.max(...prices, ...hLines) * 1.003;
   const X = (i) => (i / (cs.length - 1)) * W;
@@ -565,7 +626,7 @@ function drawSpark() {
   ctx.beginPath();
   cs.forEach((c, i) => i === 0 ? ctx.moveTo(X(i), Y(c[1])) : ctx.lineTo(X(i), Y(c[1])));
   ctx.stroke();
-  const lineCols = [[69400, "#2ecc8f"], [69724, "#2ecc8f"], [71316, "#42c6e8"], [71652, "#f5b83d"], [68142, "#ff5c6c"]];
+  const lineCols = [[72250, "#ff5c6c"], [71850, "#ff5c6c"], [71316, "#42c6e8"], [71174, "#42c6e8"], [70456, "#42c6e8"], [69600, "#2ecc8f"], [69400, "#2ecc8f"], [68142, "#ff5c6c"]];
   for (const [p, col] of lineCols) {
     if (p === null) continue;
     ctx.strokeStyle = col;
@@ -658,5 +719,5 @@ function setFeedUi() {
   setInterval(() => { $("utcClock").textContent = new Date().toISOString().slice(11, 19) + "Z"; }, 1000);
   setInterval(() => { if (state.last !== null) evaluate(); }, 2000);
   log("monitor started — feeds: Gate WS -> CoinGecko REST -> state.json", "ok");
-  log("setups: A pullback long | B breakout long | C mean-reversion short", "ev");
+  log("setups: A pullback long | B breakout long | C mean-rev short | D wall-rejection short | E ETH rotation long", "ev");
 })();

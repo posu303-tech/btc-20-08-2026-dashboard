@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const GATE_CANDLES = "https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=BTC_USDT";
+const GATE_CANDLES = "https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=";
 const DAY = 86400;
 
 async function jfetch(url, opts) {
@@ -14,19 +14,19 @@ async function jfetch(url, opts) {
   return r.json();
 }
 
-function candles(interval, from, to, limit) {
-  let u = GATE_CANDLES + "&interval=" + interval;
+function candles(pair, interval, from, to, limit) {
+  let u = GATE_CANDLES + pair + "&interval=" + interval;
   if (from) u += "&from=" + from;
   if (to) u += "&to=" + to;
   if (limit) u += "&limit=" + limit;
   return jfetch(u);
 }
 
-async function candlesAll(interval, from, to) {
+async function candlesAll(pair, interval, from, to) {
   const all = [];
   let t = to;
   while (t > from) {
-    const batch = await candles(interval, null, t, 1000);
+    const batch = await candles(pair, interval, null, t, 1000);
     if (!batch.length) break;
     all.unshift(...batch);
     t = batch[0][0] - 60;
@@ -42,14 +42,32 @@ const now = Math.floor(Date.now() / 1000);
 const dayStart = Math.floor(now / DAY) * DAY;
 const prevStart = dayStart - DAY;
 
-const [m1, h48, d22] = await Promise.all([
-  candlesAll("1m", dayStart, now),
-  candles("1h", prevStart, now, 60),
-  candles("1d", null, null, 22)
+const [m1, h48, d22, e1] = await Promise.all([
+  candlesAll("BTC_USDT", "1m", dayStart, now),
+  candles("BTC_USDT", "1h", prevStart, now, 60),
+  candles("BTC_USDT", "1d", null, null, 22),
+  candlesAll("ETH_USDT", "1m", dayStart, now)
 ]);
 
-const m1s = (m1 || []).map(c => ({ ts: +c[0], c: +c[2], h: +c[3], l: +c[4], o: +c[5], v: +c[6] }))
-  .filter(c => c.ts >= dayStart).sort((a, b) => a.ts - b.ts);
+function norm1m(batch) {
+  return (batch || []).map(c => ({ ts: +c[0], c: +c[2], h: +c[3], l: +c[4], o: +c[5], v: +c[6] }))
+    .filter(c => c.ts >= dayStart).sort((a, b) => a.ts - b.ts);
+}
+function closeAt(m1s, sec) {
+  if (!m1s.length) return null;
+  const last = m1s[m1s.length - 1].ts;
+  const boundary = Math.floor(last / sec) * sec;
+  const endTs = boundary - 60;
+  const c = m1s.find(x => x.ts === endTs);
+  return c ? c.c : null;
+}
+function bucketVol(m1s, now, sec) {
+  const last = m1s.filter(c => c.ts > now - sec);
+  return last.reduce((a, c) => a + c.v, 0);
+}
+
+const m1s = norm1m(m1);
+const e1s = norm1m(e1);
 const h1s = (h48 || []).map(c => ({ ts: +c[0], c: +c[2], h: +c[3], l: +c[4], o: +c[5], v: +c[6] }))
   .sort((a, b) => a.ts - b.ts);
 const d1s = (d22 || []).map(c => ({ ts: +c[0], c: +c[2], h: +c[3], l: +c[4], o: +c[5], v: +c[6] }))
@@ -59,6 +77,7 @@ const out = {
   ts: now, dayStart, source: "gate.io", session: null, prior: null,
   avgVol20: null, atrDaily: null, atr1h: null, last1hClose: null,
   close5m: null, close30m: null, vol30: null, avgVol30m: null,
+  ethLast: null, ethClose30m: null, ethVol30: null, ethAvgVol30m: null,
   funding: null, oi: null, yield30y: null, ssr: null,
   spark: []
 };
@@ -75,20 +94,21 @@ if (m1s.length) {
   };
   out.spark = m1s.slice(-180).map(c => [c.ts, c.c]);
 
-  const last = m1s[m1s.length - 1].ts;
-  const bucketClose = (sec) => {
-    const boundary = Math.floor(last / sec) * sec;
-    const endTs = boundary - 60;
-    const c = m1s.find(x => x.ts === endTs);
-    return c ? c.c : null;
-  };
-  out.close5m = bucketClose(300);
-  out.close30m = bucketClose(1800);
+  out.close5m = closeAt(m1s, 300);
+  out.close30m = closeAt(m1s, 1800);
 
-  const last30 = m1s.filter(c => c.ts > now - 1800);
-  out.vol30 = last30.reduce((a, c) => a + c.v, 0);
+  out.vol30 = bucketVol(m1s, now, 1800);
   const elapsedMin = Math.max(1, (now - dayStart) / 60);
   out.avgVol30m = (m1s.reduce((a, c) => a + c.v, 0) / elapsedMin) * 30;
+}
+
+if (e1s.length) {
+  const lastE = e1s[e1s.length - 1];
+  out.ethLast = lastE.c;
+  out.ethClose30m = closeAt(e1s, 1800);
+  out.ethVol30 = bucketVol(e1s, now, 1800);
+  const eElapsedMin = Math.max(1, (now - dayStart) / 60);
+  out.ethAvgVol30m = (e1s.reduce((a, c) => a + c.v, 0) / eElapsedMin) * 30;
 }
 
 const yestH = h1s.filter(c => c.ts >= prevStart && c.ts < dayStart);

@@ -35,6 +35,7 @@
       <tr><td>Session VWAP</td><td id="sVwap" class="num">--</td></tr>
       <tr><td>Prior close</td><td id="pClose" class="num">--</td></tr>
       <tr><td>5m close / 30m close</td><td id="cClose" class="num">--</td></tr>
+      <tr><td>ETH price (spot) / 24h</td><td id="cEth" class="num">--</td></tr>
       <tr><td>Post-print vol (30m) / avg</td><td id="cVol" class="num">--</td></tr>
       <tr><td>Vol ratio (30m/avg)</td><td id="volRatio" class="num">--</td></tr>
       <tr><td>Funding (perp, 8h)</td><td id="cFunding" class="num">--</td></tr>
@@ -78,7 +79,7 @@
 </section>
 
 <footer>
-  Data: Gate.io WebSocket BTC_USDT (primary), CoinGecko REST (fallback), state.json context (5-min pipeline: Gate.io candles, Binance funding/OI, US 30y ^TYX, stablecoin SSR). Levels & setup params from pre-market BTC-USD brief 2026-08-20 (08:26 UTC): fib extensions/retracements, classic pivots (prior day H/L/C), volume profile, daily SMA/EMA, ATR14, session VWAP. Setups armed 24/7 — A pullback long, B breakout long, C mean-reversion short. Not financial advice.
+  Data: Gate.io WebSocket BTC_USDT/ETH_USDT (primary), CoinGecko REST (fallback), state.json context (5-min pipeline: Gate.io candles, Binance funding/OI, US 30y ^TYX, stablecoin SSR). Levels & setup params from pre-market BTC-USD brief 2026-08-20 (08:26 UTC): fib extensions/retracements, classic pivots (prior day H/L/C), volume profile, daily SMA/EMA, ATR14, session VWAP. Setups D (wall-rejection short @ 72,000) and E (ETH rotation long) added from the 2026-08-20 09:45 UTC institutional sweep (order book wall, liquidation pools, whale flow, options skew, exchange netflows). Setups armed 24/7 — A pullback long, B breakout long, C mean-reversion short, D wall-rejection short, E ETH rotation long. Not financial advice.
 </footer>
 
 <script src="app.js"></script>

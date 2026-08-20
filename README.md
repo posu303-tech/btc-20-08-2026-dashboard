@@ -21,8 +21,12 @@ Each setup card shows the entry zone, stop, T1, T2, R:R and volume threshold, ea
 | A | LONG | 69,400–69,724 (50% retr / session VWAP / 1.618 ext) | 68,100 (invalidation: 30m close < 68,142) | 71,316 (R1) | 72,562 (61.8% retr) | 1.3 / 2.2 | 30m vol ≥ 1.0× avg + taker-buy > 50% on dip |
 | B | LONG | 71,350–71,500 (after 30m close > 71,316) | 69,600 (session VWAP) | 72,562 | 74,297 (2.618 ext) | 1.7 / 2.5 | 30m vol ≥ 1.5× avg |
 | C | SHORT | 71,316–71,652 (R1 / EMA200 / 2.0 ext rejection) | 71,652 (EMA200) | 69,600 | 68,142 (1.272 ext) | 2.0 / 3.5 | Rejection candle + taker-sell dominance, vol ≥ 1.0× avg |
+| D | SHORT | 71,850–71,950 (post-wall rejection) | 72,250 (invalidation: close > 72,150) | 71,174 (100× liq pool) | 70,456 (50× liq pool) | 3.1 / 6.3 | Rejection candle + taker-sell dominance, vol ≥ 1.0× avg |
+| E | LONG | ETH 2,220–2,240 (4h pullback) | 2,160 (invalidation: ETH 30m close < 2,160) | 2,380 | 2,450 | 2.0 / 2.9 | ETH 30m vol ≥ 1.0× avg |
 
-Note: the 30-min volume ratio (state.json `vol30/avgVol30m`) is the live proxy for the volume-confirmation thresholds; taker buy/sell dominance is a qualitative tape check from the brief.
+Note: the 30-min volume ratio (state.json `vol30/avgVol30m` for BTC, `ethVol30/ethAvgVol30m` for ETH) is the live proxy for the volume-confirmation thresholds; taker buy/sell dominance is a qualitative tape check from the brief.
+
+Setups D and E were added from the 2026-08-20 09:45 UTC institutional sweep: D short into the 72,000 wall (1,547 BTC ≈ $111M ask) with RSI 90.5 overbought + BTC exchange-inflow distribution prep + put-skew unwind; E long ETH on pullback riding record 44-day whale inflow (5.09×, 63.3% buy share), exchange outflows all week, smart-money 100% long, outperforming BTC +18.7% vs +11.8%.
 
 ## Key levels panel
 

@@ -123,6 +123,13 @@ table.kv td:first-child { color: var(--muted); }
 @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.06); } }
 .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; font-size: 11px; color: var(--muted); margin-bottom: 8px; }
 .metrics b { color: var(--text); float: right; }
+.mcell { display: flex; flex-direction: column; border: 1px solid #1e2a40; border-radius: 5px; padding: 4px 6px; background: #0f1521; }
+.mcell .mlabel { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.mcell .mval { color: var(--text); font-weight: 700; font-size: 12px; margin-top: 1px; }
+.mcell .mdist { font-size: 10px; margin-top: 1px; font-weight: 600; }
+.mdist.ok { color: var(--green); }
+.mdist.bad { color: var(--red); }
+.mdist.neu { color: var(--muted); }
 .conds { border-top: 1px dashed #1e2a40; padding-top: 7px; }
 .cond { display: flex; align-items: center; gap: 8px; font-size: 11px; padding: 3px 0; border-bottom: 1px solid #182235; }
 .cond .icon { width: 16px; text-align: center; font-weight: 700; }

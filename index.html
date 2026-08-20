@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BTC 20_08_2026 · FOMC Setup Monitor</title>
+<title>BTC 20_08_2026 · Setup Monitor</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="topbar">
   <div class="brand">
-    <h1>BTC <span>20_08_2026</span> · FOMC Setup Monitor</h1>
+    <h1>BTC <span>20_08_2026</span> · Setup Monitor</h1>
     <div class="feed-status"><span id="wsDot" class="dot"></span><span id="wsLabel">WS connecting</span>
     <span class="sep">|</span><span id="restDot" class="dot"></span><span id="restLabel">context state loading</span></div>
   </div>
@@ -48,20 +48,15 @@
   </section>
 
   <section class="card panel-setups">
-    <h2>Trade Setups <span class="live-tag">event-gated</span></h2>
+    <h2>Trade Setups <span class="live-tag">24/7 armed</span></h2>
     <div id="setups"></div>
   </section>
 
   <section class="col-right">
     <section class="card">
-      <h2>Event Timeline <span class="live-tag">FOMC minutes</span></h2>
+      <h2>Event Timeline <span class="live-tag">funding / FOMC</span></h2>
       <div id="timeline"></div>
       <div id="countdown" class="countdown">--</div>
-    </section>
-    <section class="card">
-      <h2>Manual Flags <span class="live-tag">minutes read</span></h2>
-      <div id="flags"></div>
-      <p class="hint">Toggle after reading the minutes. Feed setup conditions directly.</p>
     </section>
     <section class="card">
       <h2>Key Levels</h2>
@@ -83,7 +78,7 @@
 </section>
 
 <footer>
-  Data: Gate.io WebSocket BTC_USDT (primary), CoinGecko REST (fallback), state.json context (5-min pipeline: Gate.io candles, Binance funding/OI, US 30y ^TYX, stablecoin SSR). Levels & setup params from pre-market FOMC brief 2026-08-19. Event gates: minutes 18:00 UTC, trade window 18:05-18:45 UTC, force-flat 20:00 UTC. Not financial advice.
+  Data: Gate.io WebSocket BTC_USDT (primary), CoinGecko REST (fallback), state.json context (5-min pipeline: Gate.io candles, Binance funding/OI, US 30y ^TYX, stablecoin SSR). Levels & setup params from pre-market BTC-USD brief 2026-08-20 (08:26 UTC): fib extensions/retracements, classic pivots (prior day H/L/C), volume profile, daily SMA/EMA, ATR14, session VWAP. Setups armed 24/7 — A pullback long, B breakout long, C mean-reversion short. Not financial advice.
 </footer>
 
 <script src="app.js"></script>

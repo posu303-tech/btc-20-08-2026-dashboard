@@ -6,67 +6,62 @@ const STATE_URL = "data/state.json";
 const STATE_MAX_AGE = 8 * 60 * 1000;
 const CG_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true";
 
-const RELEASE_UTC = "18:00";
-const WINDOW_OPEN_UTC = "18:05";
-const WINDOW_CLOSE_UTC = "18:45";
-const FORCE_FLAT_UTC = "20:00";
-
-const PRIOR_CLOSE = 66910;
-const LEVELS = [
-  { name: "R2 (200% fib ext)", price: 71594, method: "fib ext" },
-  { name: "R1 (161.8% fib ext)", price: 69804, method: "fib ext / today high 69,749" },
-  { name: "Decision — 200D SMA", price: 69042, method: "200-day SMA" },
-  { name: "S1 (127.2% fib ext)", price: 68184, method: "fib ext" },
-  { name: "S2 (swing high)", price: 66910, method: "prior swing / squeeze trigger" },
-  { name: "S3 (23.6% fib)", price: 65805, method: "retracement" },
-  { name: "S4 (50% fib / pivot)", price: 64568, method: "fib / pivot" }
+const EVENTS = [
+  { hhmm: "16:00", label: "Funding reset (perp)" },
+  { hhmm: "18:00", label: "FOMC minutes (Jul 28–29)" }
 ];
 
-const FLAGS = [
-  { id: "hawk", label: "Minutes: hawkish breadth confirmed", warn: true },
-  { id: "dove", label: "Minutes: dovish lean", warn: false },
-  { id: "dxy", label: "DXY up >0.3% post-print", warn: true }
+const PRIOR_CLOSE = 69264.9;
+const LEVELS = [
+  { name: "R3 — classic pivot", price: 76951, method: "P + 2×(H−L)" },
+  { name: "2.618 fib ext", price: 74297, method: "fib ext (swing Jul21→Aug3)" },
+  { name: "61.8% retr (crash)", price: 72562, method: "fib 82,800→56,000" },
+  { name: "R2 — classic pivot", price: 73368, method: "P + (H−L)" },
+  { name: "Decision — EMA200", price: 71652, method: "daily EMA200" },
+  { name: "R1 — classic pivot", price: 71316, method: "2P − L" },
+  { name: "2.0 fib ext", price: 71471, method: "fib ext (swing)" },
+  { name: "1.618 fib ext", price: 69724, method: "fib ext (swing)" },
+  { name: "50% retr (crash)", price: 69400, method: "fib 82,800→56,000" },
+  { name: "SMA200", price: 68967, method: "daily SMA200" },
+  { name: "1.272 fib ext", price: 68142, method: "fib ext (swing)" },
+  { name: "0.786 fib", price: 65919, method: "retracement (swing)" }
 ];
 
 const SETUPS = [
   {
-    id: "A", name: "Bull continuation", dir: "LONG", longSide: true,
-    stop: 68184, t1: 69804, t2: 71594, rr: "1.4 / 2.9",
-    invalidate: "30-min close < 68,184 (S1) or DXY > +0.3%",
+    id: "A", name: "Pullback long (continuation)", dir: "LONG", side: 1,
+    entry: { lo: 69400, hi: 69724, label: "69,400–69,724" },
+    stop: 68100, t1: 71316, t2: 72562, rr: "1.3 / 2.2",
+    invalidate: "4h/30m close < 68,142 (1.272 ext) — stop 68,100",
+    vol: 1.0, volLabel: "4h vol ≥ 1.0× avg",
     conds: [
-      { k: "time", label: "Trade window open (18:05–18:45 UTC)" },
-      { k: "flag", f: "hawk", neg: true, label: "Minutes NOT hawkish (manual)" },
-      { k: "above", v: 69042, label: "30-min close > $69,042 (200D SMA)" },
-      { k: "vol", label: "Post-print 30m volume ≥ avg (ratio ≥ 1.0)" },
-      { k: "above", v: 68184, label: "Not invalidated: 30-min close ≥ $68,184 (S1)" },
-      { k: "flag", f: "dxy", neg: true, label: "DXY NOT up >0.3% (manual)" }
+      { k: "band", lo: 69400, hi: 69724, use: "price", label: "Price in entry zone 69,400–69,724" },
+      { k: "above", v: 68142, use: "close30m", label: "Not invalidated: 30m close ≥ 68,142 (1.272 ext)" },
+      { k: "vol", min: 1.0, label: "Volume confirm: 30m vol ≥ 1.0× avg" }
     ]
   },
   {
-    id: "B", name: "Hawkish surprise short", dir: "SHORT", longSide: false,
-    stop: 69300, t1: 66910, t2: 65805, rr: "1.3 / 2.5",
-    invalidate: "5-min close ≥ 69,042 (decision line reclaimed)",
+    id: "B", name: "Breakout continuation (momentum)", dir: "LONG", side: 1,
+    entry: { lo: 71350, hi: 71500, label: "71,350–71,500" },
+    stop: 69600, t1: 72562, t2: 74297, rr: "1.7 / 2.5",
+    invalidate: "4h/30m close back < 69,600 (session VWAP)",
+    vol: 1.5, volLabel: "4h vol > 1.5× avg",
     conds: [
-      { k: "time", label: "Trade window open (18:05–18:45 UTC)" },
-      { k: "flag", f: "hawk", neg: false, label: "Minutes hawkish breadth (manual)" },
-      { k: "below", v: 68184, label: "5-min close < $68,184 (S1 breakdown)" },
-      { k: "below", v: 69042, label: "Not invalidated: 5-min close < $69,042" }
+      { k: "above", v: 71316, use: "close30m", label: "4h/30m close > 71,316 (R1 breakout)" },
+      { k: "band", lo: 71350, hi: 71500, use: "price", label: "Price in entry zone 71,350–71,500" },
+      { k: "vol", min: 1.5, label: "Volume confirm: 30m vol ≥ 1.5× avg" }
     ]
   },
   {
-    id: "C", name: "Neutral range scalp (2 legs)", dir: "RANGE", longSide: null,
-    stop: null, t1: null, t2: null, rr: "S 3.4 / L 2.2",
-    invalidate: "30-min close > 70,150 or < 68,000",
+    id: "C", name: "Mean-reversion short (small size)", dir: "SHORT", side: -1,
+    entry: { lo: 71316, hi: 71652, label: "71,316–71,652" },
+    stop: 71652, t1: 69600, t2: 68142, rr: "2.0 / 3.5",
+    invalidate: "4h/30m close > 71,652 (EMA200)",
+    vol: 1.0, volLabel: "rejection candle + taker-sell dom",
     conds: [
-      { k: "time", label: "Trade window open (18:05–18:45 UTC)" },
-      { k: "flag", f: "hawk", neg: true, label: "Minutes neutral — no hawkish (manual)" },
-      { k: "flag", f: "dove", neg: true, label: "Minutes neutral — no dovish (manual)" },
-      { k: "band", lo: 68184, hi: 69804, label: "Price within $68,184–$69,804 band" },
-      { k: "band", lo: 68000, hi: 70150, label: "Not invalidated: 30-min close in $68,000–$70,150" }
-    ],
-    legs: [
-      { side: "SHORT", zone: "69,500–69,800", stop: 70150, tgt: 68400 },
-      { side: "LONG", zone: "68,300–68,500", stop: 67900, tgt: 69500 }
+      { k: "band", lo: 71316, hi: 71652, use: "price", label: "Price in rejection zone 71,316–71,652" },
+      { k: "below", v: 71652, use: "close30m", label: "Not invalidated: 30m close < 71,652 (EMA200)" },
+      { k: "vol", min: 1.0, label: "Volume confirm: 30m vol ≥ 1.0× avg" }
     ]
   }
 ];
@@ -80,7 +75,7 @@ const state = {
   funding: null, oi: null, yield30y: null, ssr: null,
   prevOi: null, ssrBase: null,
   candles1m: [], stateTs: null, lastUpdated: null,
-  prevStatus: {}, fired: {}, flags: { hawk: false, dove: false, dxy: false },
+  prevStatus: {}, fired: {},
   lastTripKey: ""
 };
 
@@ -121,15 +116,10 @@ function todayUTC(hm) {
 
 function getPhase() {
   const now = Date.now();
-  const tR = todayUTC(RELEASE_UTC), tW = todayUTC(WINDOW_OPEN_UTC), tC = todayUTC(WINDOW_CLOSE_UTC), tF = todayUTC(FORCE_FLAT_UTC);
-  let phase, next;
-  if (now < tR) { phase = "PRE-EVENT"; next = { ts: tR, label: "minutes release" }; }
-  else if (now < tW) { phase = "RELEASE"; next = { ts: tW, label: "trade window" }; }
-  else if (now < tC) { phase = "TRADE WINDOW"; next = { ts: tC, label: "stand down" }; }
-  else if (now < tF) { phase = "STAND DOWN"; next = { ts: tF, label: "force-flat" }; }
-  else { phase = "FORCE-FLAT"; next = null; }
-  const windowOpen = now >= tW && now < tC;
-  return { phase, next, windowOpen };
+  const upcoming = EVENTS.map(e => ({ ts: todayUTC(e.hhmm), label: e.label }))
+    .filter(e => e.ts > now)
+    .sort((a, b) => a.ts - b.ts);
+  return { phase: "MONITORING", next: upcoming[0] || null };
 }
 
 async function fetchState() {
@@ -252,121 +242,89 @@ function connectWS() {
   }, 30000);
 }
 
+function refVal(cond) {
+  if (cond.use === "close5m") return state.close5m ?? state.last;
+  if (cond.use === "close30m") return state.close30m ?? state.last;
+  return state.last;
+}
+
 function condMet(cond) {
-  const ph = getPhase();
-  const p = state.last;
+  const p = refVal(cond);
   switch (cond.k) {
-    case "time": return ph.windowOpen;
-    case "flag": {
-      const v = state.flags[cond.f];
-      return cond.neg ? !v : v;
-    }
-    case "above": return (state.close30m ?? p) > cond.v;
-    case "below": return (state.close5m ?? p) < cond.v;
+    case "above": return p > cond.v;
+    case "below": return p < cond.v;
     case "vol": {
       const r = (state.vol30 ?? 0) / (state.avgVol30m || 1);
-      return r >= 1.0;
+      return r >= (cond.min ?? 1.0);
     }
-    case "band": {
-      const v = cond.label.startsWith("Not invalidated") ? (state.close30m ?? p) : p;
-      return v >= cond.lo && v <= cond.hi;
-    }
+    case "band": return p >= cond.lo && p <= cond.hi;
   }
   return false;
 }
 
 function condNote(cond) {
-  const p = state.last;
-  const ph = getPhase();
+  const p = refVal(cond);
   switch (cond.k) {
-    case "time": {
-      const tW = todayUTC(WINDOW_OPEN_UTC), tC = todayUTC(WINDOW_CLOSE_UTC);
-      const n = Date.now();
-      if (n < tW) return "window opens in " + fmt(Math.max(0, (tW - n) / 60000), 1) + "m";
-      if (n < tC) return "window closes in " + fmt(Math.max(0, (tC - n) / 60000), 1) + "m";
-      return "window closed";
-    }
-    case "flag": {
-      const v = state.flags[cond.f];
-      return cond.neg ? (v ? "set — BLOCKING" : "OK (toggle)") : (v ? "OK (toggle)" : "not set — BLOCKING");
-    }
     case "above": {
-      const v = state.close30m ?? p;
-      const gap = cond.v - v;
+      const gap = cond.v - p;
       return gap > 0 ? "gap " + fmt(gap) + " (" + fmt(Math.abs(gap) / cond.v * 100, 2) + "%)" : "OK";
     }
     case "below": {
-      const v = state.close5m ?? p;
-      const gap = v - cond.v;
+      const gap = p - cond.v;
       return gap > 0 ? "gap " + fmt(gap) + " (" + fmt(Math.abs(gap) / cond.v * 100, 2) + "%)" : "OK";
     }
     case "vol": {
       const r = (state.vol30 ?? 0) / (state.avgVol30m || 1);
-      return r >= 1.0 ? "OK " + fmt(r, 2) + "x" : "ratio " + fmt(r, 2) + "x (needs 1.0x)";
+      const min = cond.min ?? 1.0;
+      return r >= min ? "OK " + fmt(r, 2) + "x" : "ratio " + fmt(r, 2) + "x (needs " + min + "x)";
     }
     case "band": {
-      const v = cond.label.startsWith("Not invalidated") ? (state.close30m ?? p) : p;
-      if (v < cond.lo) return "gap " + fmt(cond.lo - v) + " below";
-      if (v > cond.hi) return "gap " + fmt(v - cond.hi) + " above";
-      return "in band";
+      if (p < cond.lo) return "gap " + fmt(cond.lo - p) + " below";
+      if (p > cond.hi) return "gap " + fmt(p - cond.hi) + " above";
+      return "in zone";
     }
   }
   return "--";
 }
 
 function condProgress(cond) {
-  const p = state.last;
+  const p = refVal(cond);
   const met = condMet(cond);
   switch (cond.k) {
-    case "time": {
-      const ph = getPhase();
-      if (!ph.next || met) return met ? 100 : 0;
-      const w = todayUTC(WINDOW_OPEN_UTC), c = todayUTC(WINDOW_CLOSE_UTC);
-      const total = c - w;
-      const done = clamp(1 - (ph.next.ts - Date.now()) / total, 0, 1);
-      return done * 100;
-    }
     case "above": {
-      const v = state.close30m ?? p;
-      const span = Math.abs(cond.v - 68184) || 1000;
-      return met ? 100 : clamp(100 - (cond.v - v) / span * 100, 0, 99);
+      const span = Math.abs(cond.v - 68142) || 1000;
+      return met ? 100 : clamp(100 - (cond.v - p) / span * 100, 0, 99);
     }
     case "below": {
-      const v = state.close5m ?? p;
-      const span = Math.abs(cond.v - 69042) || 1000;
-      return met ? 100 : clamp(100 - (v - cond.v) / span * 100, 0, 99);
+      const span = Math.abs(cond.v - 71652) || 1000;
+      return met ? 100 : clamp(100 - (p - cond.v) / span * 100, 0, 99);
     }
     case "vol": {
       const r = (state.vol30 ?? 0) / (state.avgVol30m || 1);
-      return met ? 100 : clamp(r * 100, 0, 99);
+      const min = cond.min ?? 1.0;
+      return met ? 100 : clamp(r / min * 100, 0, 99);
     }
     case "band": {
-      const v = cond.label.startsWith("Not invalidated") ? (state.close30m ?? p) : p;
       if (met) return 100;
-      const dlo = Math.max(0, cond.lo - v), dhi = Math.max(0, v - cond.hi);
+      const dlo = Math.max(0, cond.lo - p), dhi = Math.max(0, p - cond.hi);
       const d = Math.max(dlo, dhi);
       const span = (cond.hi - cond.lo) / 2;
       return clamp(100 - d / span * 100, 0, 99);
     }
-    case "flag": return met ? 100 : 30;
   }
   return met ? 100 : 0;
 }
 
 function setupInvalid(setup) {
-  const p = state.last;
-  if (setup.id === "A") return (state.close30m ?? p) < 68184 || state.flags.dxy;
-  if (setup.id === "B") return (state.close5m ?? p) >= 69042;
-  if (setup.id === "C") {
-    const v = state.close30m ?? p;
-    return v > 70150 || v < 68000;
-  }
+  const c30 = state.close30m ?? state.last;
+  if (setup.id === "A") return c30 < 68142;
+  if (setup.id === "B") return c30 < 69600;
+  if (setup.id === "C") return c30 > 71652;
   return false;
 }
 
 function evaluate() {
   if (state.last === null) return;
-  const ph = getPhase();
   for (const setup of SETUPS) {
     const results = setup.conds.map(c => ({ c, met: condMet(c), note: condNote(c), prog: condProgress(c) }));
     const metCount = results.filter(r => r.met).length;
@@ -381,7 +339,7 @@ function evaluate() {
     const prev = state.prevStatus[setup.id];
     if (status === "valid" && prev !== "valid") fireTrigger(setup);
     state.prevStatus[setup.id] = status;
-    renderSetup(setup, results, status, pct, ph);
+    renderSetup(setup, results, status, pct);
   }
 }
 
@@ -389,10 +347,8 @@ function fireTrigger(setup) {
   const key = setup.id + "_" + new Date().toUTCString().slice(0, 16);
   if (state.fired[key]) return;
   state.fired[key] = true;
-  const dirTxt = setup.dir === "LONG" ? "LONG" : (setup.dir === "SHORT" ? "SHORT" : "RANGE");
-  log("TRIGGER FIRED — Setup " + setup.id + " " + setup.name + " (" + dirTxt + ") @ " + fmt(state.last), "ok");
-  if (setup.stop) log("Levels — stop " + fmt(setup.stop) + " | T1 " + fmt(setup.t1) + " | T2 " + fmt(setup.t2), "ev");
-  else if (setup.legs) log("Legs — " + setup.legs.map(l => l.side + " " + l.zone + " stop " + fmt(l.stop) + " tgt " + fmt(l.tgt)).join(" | "), "ev");
+  log("TRIGGER FIRED — Setup " + setup.id + " " + setup.name + " (" + setup.dir + ") @ " + fmt(state.last), "ok");
+  log("Levels — entry " + setup.entry.label + " | stop " + fmt(setup.stop) + " | T1 " + fmt(setup.t1) + " | T2 " + fmt(setup.t2), "ev");
   const banner = $("triggerBanner");
   banner.classList.remove("hidden");
   banner.classList.toggle("down", setup.dir === "SHORT");
@@ -403,13 +359,49 @@ function fireTrigger(setup) {
   if (Notification.permission === "granted") {
     try {
       new Notification("BTC 20_08_2026 TRIGGER — Setup " + setup.id, {
-        body: setup.name + " validated @ " + fmt(state.last) + (setup.stop ? " | stop " + fmt(setup.stop) + " | T1 " + fmt(setup.t1) : "")
+        body: setup.name + " validated @ " + fmt(state.last) + " | stop " + fmt(setup.stop) + " | T1 " + fmt(setup.t1)
       });
     } catch (e) { }
   }
 }
 
-function renderSetup(setup, results, status, pct, ph) {
+function distInfo(level, setup) {
+  const p = state.last;
+  if (p === null || level === null) return { txt: "--", cls: "neu" };
+  const pct = (level - p) / p * 100;
+  const above = level > p;
+  const favorable = setup.side > 0 ? above : !above;
+  return {
+    txt: (above ? "+" : "") + fmt(pct, 2) + "% (" + fmt(Math.abs(level - p)) + ")",
+    cls: favorable ? "ok" : "bad"
+  };
+}
+
+function zoneDist(setup) {
+  const p = state.last;
+  if (p === null) return { txt: "--", cls: "neu" };
+  if (p < setup.entry.lo) {
+    const g = setup.entry.lo - p;
+    return { txt: "below zone by " + fmt(g) + " (" + fmt(g / setup.entry.lo * 100, 2) + "%)", cls: "bad" };
+  }
+  if (p > setup.entry.hi) {
+    const g = p - setup.entry.hi;
+    return { txt: "above zone by " + fmt(g) + " (" + fmt(g / setup.entry.hi * 100, 2) + "%)", cls: "bad" };
+  }
+  return { txt: "IN ZONE", cls: "ok" };
+}
+
+function volInfo(setup) {
+  const r = (state.vol30 ?? 0) / (state.avgVol30m || 1);
+  const min = setup.vol ?? 1.0;
+  if (r === null || isNaN(r)) return { txt: "--", cls: "neu" };
+  return {
+    txt: fmt(r, 2) + "x / need " + min + "x",
+    cls: r >= min ? "ok" : "bad"
+  };
+}
+
+function renderSetup(setup, results, status, pct) {
   const el = $("setup-" + setup.id);
   if (!el) return;
   el.querySelector(".pill").textContent = status.toUpperCase();
@@ -419,31 +411,32 @@ function renderSetup(setup, results, status, pct, ph) {
   fill.classList.toggle("full", status === "valid");
   fill.classList.toggle("neg", status === "invalid");
   el.querySelector(".prox-pct").textContent = pct + "% met (" + results.filter(r => r.met).length + "/" + results.length + ")";
+
+  const cell = (label, value, dist) =>
+    "<div class='mcell'><span class='mlabel'>" + label + "</span><span class='mval'>" + value + "</span>" +
+    "<span class='mdist " + dist.cls + "'>" + dist.txt + "</span></div>";
+
+  const zone = zoneDist(setup);
+  el.querySelector(".metrics").innerHTML =
+    cell("Entry", setup.entry.label, zone) +
+    cell("Stop", fmt(setup.stop), distInfo(setup.stop, setup)) +
+    cell("T1", fmt(setup.t1), distInfo(setup.t1, setup)) +
+    cell("T2", fmt(setup.t2), distInfo(setup.t2, setup)) +
+    cell("R:R", setup.rr, { txt: "T1/T2 vs stop", cls: "neu" }) +
+    cell("Vol", setup.volLabel, volInfo(setup));
+
   const condsEl = el.querySelector(".conds");
   condsEl.innerHTML = "";
   for (const r of results) {
     const row = document.createElement("div");
     row.className = "cond";
-    const ic = r.met ? "ok" : (r.c.k === "flag" ? "pen" : "no");
+    const ic = r.met ? "ok" : "no";
     const val = r.met ? "OK" : r.note;
     row.innerHTML =
-      "<span class='icon " + ic + "'>" + (r.met ? "&#10003;" : (r.c.k === "flag" ? "&#9675;" : "&#10007;")) + "</span>" +
+      "<span class='icon " + ic + "'>" + (r.met ? "&#10003;" : "&#10007;") + "</span>" +
       "<span class='clabel'>" + r.c.label + "</span>" +
       "<span class='cval " + (r.met ? "ok" : "gap") + "'>" + val + "</span>";
     condsEl.appendChild(row);
-  }
-  if (setup.legs) {
-    const legsEl = el.querySelector(".legs");
-    legsEl.innerHTML = "";
-    for (const l of setup.legs) {
-      const leg = document.createElement("div");
-      leg.className = "cond";
-      leg.innerHTML =
-        "<span class='icon " + (l.side === "LONG" ? "ok" : "no") + "'>" + (l.side === "LONG" ? "&#9650;" : "&#9660;") + "</span>" +
-        "<span class='clabel'>" + l.side + " leg entry " + l.zone + "</span>" +
-        "<span class='cval'>stop " + fmt(l.stop) + " / tgt " + fmt(l.tgt) + "</span>";
-      legsEl.appendChild(leg);
-    }
   }
 }
 
@@ -473,7 +466,7 @@ function renderPrice() {
   const ph = getPhase();
   const phEl = $("phaseName");
   phEl.textContent = ph.phase;
-  phEl.className = ph.windowOpen ? "live" : (ph.phase === "FORCE-FLAT" || ph.phase === "STAND DOWN" ? "warn" : "");
+  phEl.className = "live";
   renderTimeline(ph);
   renderLevels();
   renderKillsw();
@@ -482,25 +475,23 @@ function renderPrice() {
 
 function renderTimeline(ph) {
   const rows = [
-    ["< 18:00Z", "PRE-EVENT", "flat — no entries"],
-    ["18:00Z", "RELEASE", "no market orders"],
-    ["18:05Z", "TRADE WINDOW", "setups active"],
-    ["18:45Z", "STAND DOWN", "no new entries"],
-    ["20:00Z", "FORCE-FLAT", "session over"]
+    ["Now", "MONITORING", "setups armed 24/7"],
+    ["16:00Z", "Funding reset", "perp funding re-prices"],
+    ["18:00Z", "FOMC minutes", "volatility window"],
+    ["Aug 26", "US PCE", "macro input"],
+    ["Late Aug", "Jackson Hole", "Fed Chair speech"]
   ];
-  const order = ["PRE-EVENT", "RELEASE", "TRADE WINDOW", "STAND DOWN", "FORCE-FLAT"];
-  const idx = order.indexOf(ph.phase);
   const tl = $("timeline");
   tl.innerHTML = "";
-  rows.forEach((r, i) => {
+  rows.forEach(r => {
     const div = document.createElement("div");
-    div.className = "tlrow" + (i === idx ? " now" : (i < idx ? " past" : ""));
+    div.className = "tlrow" + (r[0] === "Now" ? " now" : "");
     div.innerHTML = "<span class='tlt'>" + r[0] + "</span><span class='tlname'>" + r[1] + "</span><span class='tlnote'>" + r[2] + "</span>";
     tl.appendChild(div);
   });
   $("countdown").textContent = ph.next
     ? "Next: " + ph.next.label + " in " + fmt(Math.max(0, (ph.next.ts - Date.now()) / 60000), 1) + " min"
-    : "Session complete — flat";
+    : "No scheduled event today";
 }
 
 function renderLevels() {
@@ -526,7 +517,7 @@ function renderKillsw() {
   if (state.oi !== null && state.prevOi !== null && state.oi > state.prevOi * 1.02 && (state.change24 ?? 0) < 0.5)
     trips.push({ n: "OI +2% vs price flat", v: fmtBig(state.oi), a: "new longs — squeeze exhaustion, suspect" });
   if (state.ssr !== null && state.ssrBase !== null && state.ssr > state.ssrBase * 1.05)
-    trips.push({ n: "SSR rising +5% vs base", v: fmt(state.ssr, 2), a: "unfunded rally — fade into 70k" });
+    trips.push({ n: "SSR rising +5% vs base", v: fmt(state.ssr, 2), a: "unfunded rally — fade strength" });
 
   const tripKey = trips.map(t => t.n).join("|");
   if (tripKey !== state.lastTripKey && trips.length) {
@@ -564,7 +555,7 @@ function drawSpark() {
   const cs = state.candles1m;
   if (cs.length < 2) return;
   const prices = cs.map(c => c[1]);
-  const hLines = [69042, 69804, 68184, 66910];
+  const hLines = [69400, 69724, 71316, 71652, 68142];
   const min = Math.min(...prices, ...hLines) * 0.997;
   const max = Math.max(...prices, ...hLines) * 1.003;
   const X = (i) => (i / (cs.length - 1)) * W;
@@ -574,7 +565,7 @@ function drawSpark() {
   ctx.beginPath();
   cs.forEach((c, i) => i === 0 ? ctx.moveTo(X(i), Y(c[1])) : ctx.lineTo(X(i), Y(c[1])));
   ctx.stroke();
-  const lineCols = [[69042, "#f5b83d"], [69804, "#42c6e8"], [68184, "#ff5c6c"], [66910, "#ff8a5c"]];
+  const lineCols = [[69400, "#2ecc8f"], [69724, "#2ecc8f"], [71316, "#42c6e8"], [71652, "#f5b83d"], [68142, "#ff5c6c"]];
   for (const [p, col] of lineCols) {
     if (p === null) continue;
     ctx.strokeStyle = col;
@@ -613,39 +604,15 @@ function buildSetups() {
     const div = document.createElement("div");
     div.className = "setup";
     div.id = "setup-" + setup.id;
-    let metrics = setup.stop
-      ? "<span>Stop <b>" + fmt(setup.stop) + "</b></span><span>T1 <b>" + fmt(setup.t1) + "</b></span><span>T2 <b>" + fmt(setup.t2) + "</b></span><span>R:R <b>" + setup.rr + "</b></span>"
-      : "<span>Legs (half size) <b>2</b></span><span>R:R <b>" + setup.rr + "</b></span>";
     div.innerHTML =
       "<div class='head'><span class='sid'>" + setup.id + "</span>" +
       "<span class='sname'>" + setup.name + "</span>" +
-      "<span class='dir " + (setup.dir === "LONG" ? "long" : setup.dir === "SHORT" ? "short" : "range") + "'>" + setup.dir + "</span>" +
+      "<span class='dir " + (setup.dir === "LONG" ? "long" : "short") + "'>" + setup.dir + "</span>" +
       "<span class='pill'>armed</span></div>" +
-      "<div class='metrics'>" + metrics + "</div>" +
+      "<div class='metrics'></div>" +
       "<div class='conds'></div>" +
-      (setup.legs ? "<div class='legs'></div>" : "") +
       "<div class='prox-row'><div class='prox-bar'><div class='prox-fill'></div></div><div class='prox-pct'>--</div></div>" +
       "<div class='inval'>Invalidation: <b>" + setup.invalidate + "</b></div>";
-    wrap.appendChild(div);
-  }
-}
-
-function buildFlags() {
-  const wrap = $("flags");
-  wrap.innerHTML = "";
-  for (const f of FLAGS) {
-    const div = document.createElement("div");
-    div.className = "flag";
-    const btn = document.createElement("button");
-    btn.className = "fbtn" + (state.flags[f.id] ? (f.warn ? " warnon" : " on") : "");
-    btn.innerHTML = "<span>" + f.label + "</span><span class='fdot'></span>";
-    btn.addEventListener("click", () => {
-      state.flags[f.id] = !state.flags[f.id];
-      btn.className = "fbtn" + (state.flags[f.id] ? (f.warn ? " warnon" : " on") : "");
-      log("flag " + f.id + " -> " + state.flags[f.id], "ev");
-      evaluate();
-    });
-    div.appendChild(btn);
     wrap.appendChild(div);
   }
 }
@@ -682,7 +649,6 @@ function setFeedUi() {
 
 (async function init() {
   buildSetups();
-  buildFlags();
   await fetchState();
   evaluate();
   renderPrice();
@@ -692,5 +658,5 @@ function setFeedUi() {
   setInterval(() => { $("utcClock").textContent = new Date().toISOString().slice(11, 19) + "Z"; }, 1000);
   setInterval(() => { if (state.last !== null) evaluate(); }, 2000);
   log("monitor started — feeds: Gate WS -> CoinGecko REST -> state.json", "ok");
-  log("event gates: release 18:00Z | window 18:05–18:45Z | force-flat 20:00Z", "ev");
+  log("setups: A pullback long | B breakout long | C mean-reversion short", "ev");
 })();
